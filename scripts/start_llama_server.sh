@@ -15,6 +15,7 @@ N_GPU_LAYERS="${N_GPU_LAYERS:-99}"
 PARALLEL="${PARALLEL:-1}"
 LOG_FILE="${LOG_FILE:-/content/llama-server.log}"
 BACKGROUND="${BACKGROUND:-1}"
+RESTART_SERVER="${RESTART_SERVER:-1}"
 
 if [ ! -x "$LLAMA_SERVER_BIN" ]; then
   echo "llama-server was not found at: $LLAMA_SERVER_BIN" >&2
@@ -23,6 +24,27 @@ if [ ! -x "$LLAMA_SERVER_BIN" ]; then
 fi
 
 mkdir -p "$(dirname "$LOG_FILE")"
+
+stop_existing_server() {
+  echo "==> Stopping any existing process on port $PORT"
+
+  if [ -f /content/llama-server.pid ]; then
+    old_pid="$(cat /content/llama-server.pid 2>/dev/null || true)"
+    if [ -n "$old_pid" ] && kill -0 "$old_pid" >/dev/null 2>&1; then
+      kill "$old_pid" >/dev/null 2>&1 || true
+      sleep 3
+      kill -9 "$old_pid" >/dev/null 2>&1 || true
+    fi
+    rm -f /content/llama-server.pid
+  fi
+
+  if command -v fuser >/dev/null 2>&1; then
+    fuser -k "${PORT}/tcp" >/dev/null 2>&1 || true
+  fi
+
+  pkill -f "llama-server.*(--port| )${PORT}" >/dev/null 2>&1 || true
+  sleep 2
+}
 
 cmd=(
   "$LLAMA_SERVER_BIN"
@@ -51,16 +73,27 @@ printf ' %q' "${cmd[@]}"
 printf '\n'
 
 if [ "$BACKGROUND" = "1" ]; then
-  if pgrep -f "llama-server.*--port $PORT" >/dev/null 2>&1; then
+  if [ "$RESTART_SERVER" = "1" ]; then
+    stop_existing_server
+  elif pgrep -f "llama-server.*(--port| )${PORT}" >/dev/null 2>&1; then
     echo "A llama-server process already appears to be using port $PORT."
-  else
-    nohup "${cmd[@]}" > "$LOG_FILE" 2>&1 &
-    echo $! > /content/llama-server.pid
-    echo "PID: $(cat /content/llama-server.pid)"
+    echo "Set RESTART_SERVER=1 to force a clean restart."
+    exit 0
   fi
+
+  if [ -f "$LOG_FILE" ]; then
+    mv "$LOG_FILE" "${LOG_FILE}.$(date +%Y%m%d-%H%M%S).old" || true
+  fi
+
+  nohup "${cmd[@]}" > "$LOG_FILE" 2>&1 &
+  echo $! > /content/llama-server.pid
+  echo "PID: $(cat /content/llama-server.pid)"
 
   echo "Waiting briefly for the server to bind..."
   sleep 8
+  echo "Process status:"
+  ps -p "$(cat /content/llama-server.pid)" -o pid,etime,pcpu,pmem,args || true
+  echo "Recent log:"
   tail -n 80 "$LOG_FILE" || true
 else
   exec "${cmd[@]}"

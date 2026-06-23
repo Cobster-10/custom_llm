@@ -27,29 +27,49 @@ def main() -> int:
     args = parser.parse_args()
 
     base_url = args.base_url.rstrip("/")
-    health_url = f"{base_url}/health"
+    health_urls = [f"{base_url}/health", f"{base_url}/v1/health"]
     models_url = f"{base_url}/v1/models"
     deadline = time.time() + args.timeout
     last_status = None
+    not_found_count = 0
 
-    print(f"Waiting for llama-server: {health_url}")
+    print(f"Waiting for llama-server: {health_urls[0]}")
     while time.time() < deadline:
-        try:
-            response = requests.get(health_url, timeout=10)
-            body = render_response(response)
-            last_status = f"GET /health -> HTTP {response.status_code}: {body}"
+        saw_404 = False
+        for health_url in health_urls:
+            try:
+                response = requests.get(health_url, timeout=10)
+                body = render_response(response)
+                route = health_url.removeprefix(base_url)
+                last_status = f"GET {route} -> HTTP {response.status_code}: {body}"
 
-            if response.status_code == 200:
+                if response.status_code == 200:
+                    print(last_status)
+                    models = requests.get(models_url, timeout=20)
+                    print(f"GET /v1/models -> HTTP {models.status_code}")
+                    print(render_response(models))
+                    return 0
+
+                if response.status_code == 503:
+                    print(last_status)
+                    saw_404 = False
+                    break
+
+                if response.status_code == 404:
+                    saw_404 = True
+
                 print(last_status)
-                models = requests.get(models_url, timeout=20)
-                print(f"GET /v1/models -> HTTP {models.status_code}")
-                print(render_response(models))
-                return 0
+            except requests.RequestException as exc:
+                last_status = f"{type(exc).__name__}: {exc}"
+                print(last_status)
 
-            print(last_status)
-        except requests.RequestException as exc:
-            last_status = f"{type(exc).__name__}: {exc}"
-            print(last_status)
+        if saw_404:
+            not_found_count += 1
+            if not_found_count >= 12:
+                print("FAIL: /health keeps returning 404. This usually means the wrong or stale service is on the port.")
+                break
+        else:
+            not_found_count = 0
 
         time.sleep(args.interval)
 
@@ -62,6 +82,14 @@ def main() -> int:
         print(f"\nLast 120 lines of {log_path}:")
         lines = log_path.read_text(errors="replace").splitlines()
         print("\n".join(lines[-120:]))
+
+    print("\nProcess snapshot:")
+    try:
+        import subprocess
+
+        subprocess.run(["ps", "-eo", "pid,etime,pcpu,pmem,args"], check=False)
+    except Exception as exc:
+        print(f"Could not print process snapshot: {exc}")
 
     return 1
 
