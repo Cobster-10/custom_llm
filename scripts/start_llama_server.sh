@@ -27,6 +27,7 @@ mkdir -p "$(dirname "$LOG_FILE")"
 cmd=(
   "$LLAMA_SERVER_BIN"
   -hf "$MODEL_ID"
+  --alias "$MODEL_ID"
   --host "$HOST"
   --port "$PORT"
   --jinja

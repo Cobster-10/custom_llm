@@ -11,6 +11,25 @@ def pretty(value: Any) -> str:
     return json.dumps(value, indent=2, ensure_ascii=False, sort_keys=True)
 
 
+def print_probe(base_url: str, headers: dict[str, str]) -> None:
+    root_url = base_url.rstrip("/").removesuffix("/v1")
+    probe_urls = [
+        root_url,
+        root_url + "/health",
+        root_url + "/v1/models",
+    ]
+
+    print("\nEndpoint probe:")
+    for url in probe_urls:
+        try:
+            response = requests.get(url, headers=headers, timeout=20)
+            print(f"GET {url} -> HTTP {response.status_code}")
+            if response.text:
+                print(response.text[:2000])
+        except requests.RequestException as exc:
+            print(f"GET {url} -> {type(exc).__name__}: {exc}")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="Check whether an OpenAI-compatible endpoint returns structured tool_calls."
@@ -83,16 +102,22 @@ def main() -> int:
     print(f"POST {url}")
     response = requests.post(url, headers=headers, json=payload, timeout=args.timeout)
     print(f"HTTP {response.status_code}")
+    print(f"Content-Type: {response.headers.get('content-type', '<missing>')}")
 
     try:
         data = response.json()
     except ValueError:
-        print(response.text[:4000])
+        if response.text:
+            print(response.text[:4000])
+        else:
+            print("<empty response body>")
+        print_probe(args.base_url, headers)
         return 1
 
     print(pretty(data))
 
     if response.status_code >= 400:
+        print_probe(args.base_url, headers)
         return 1
 
     try:
