@@ -17,6 +17,7 @@ venv/
 models/
 logs/
 tmp/
+*.tar.gz
 
 # OS/editor
 .DS_Store

@@ -4,6 +4,7 @@ set -euo pipefail
 RUNTIME_DIR="${RUNTIME_DIR:-$HOME/custom_llm_runtime}"
 LLAMA_CPP_DIR="${LLAMA_CPP_DIR:-$RUNTIME_DIR/llama.cpp}"
 CMAKE_BUILD_TYPE="${CMAKE_BUILD_TYPE:-Release}"
+CMAKE_CUDA_ARCHITECTURES="${CMAKE_CUDA_ARCHITECTURES:-80}"
 BUILD_THREADS="${BUILD_THREADS:-$(nproc)}"
 LLAMA_CPP_VERSION="${LLAMA_CPP_VERSION:-latest}"
 INSTALL_SYSTEM_PACKAGES="${INSTALL_SYSTEM_PACKAGES:-1}"
@@ -47,6 +48,7 @@ maybe_install_system_packages() {
     cmake \
     curl \
     git \
+    libssl-dev \
     ninja-build \
     pkg-config \
     python3
@@ -114,8 +116,10 @@ echo "==> Building llama-server with CUDA support"
 cmake -S "$LLAMA_CPP_DIR" -B "$LLAMA_CPP_DIR/build" \
   -G "$CMAKE_GENERATOR" \
   -DCMAKE_BUILD_TYPE="$CMAKE_BUILD_TYPE" \
+  -DCMAKE_CUDA_ARCHITECTURES="$CMAKE_CUDA_ARCHITECTURES" \
   -DGGML_CUDA=ON \
   -DLLAMA_CURL=ON \
+  -DLLAMA_OPENSSL=ON \
   -DLLAMA_BUILD_UI=OFF \
   -DLLAMA_USE_PREBUILT_UI=ON
 

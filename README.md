@@ -11,22 +11,22 @@ choices[0].finish_reason == "tool_calls"
 
 ## Target Model
 
-Default model:
+Verified Thunder model:
 
 ```text
-HauhauCS/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive:Q8_K_P
+HauhauCS/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive:Q4_K_M
 ```
 
 Default runtime settings:
 
 ```text
 PORT=8080
-CTX_SIZE=131072
+CTX_SIZE=4096
 N_GPU_LAYERS=99
 PARALLEL=1
 ```
 
-`Q8_K_P` is the preferred first test on an 80 GB GPU. If VRAM is tight, lower `CTX_SIZE` first, for example to `65536`. If that still fails, use a smaller quant such as `Q4_K_M`.
+`Q4_K_M` is the first verified Thunder configuration for structured tool calls. `Q8_K_P` downloads on an A100 80 GB instance, but still needs loading/runtime tuning before it should be treated as the default.
 
 ## Thunder Compute Flow
 
@@ -74,6 +74,8 @@ Override with `RUNTIME_DIR` if needed:
 ```bash
 RUNTIME_DIR=/data/custom_llm_runtime bash scripts/setup_gpu_server.sh
 ```
+
+The setup defaults `CMAKE_CUDA_ARCHITECTURES=80`, which targets the A100. Override it only if you switch to a different GPU family.
 
 ## Important Files
 

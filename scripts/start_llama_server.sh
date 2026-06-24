@@ -5,13 +5,20 @@ RUNTIME_DIR="${RUNTIME_DIR:-$HOME/custom_llm_runtime}"
 LLAMA_CPP_DIR="${LLAMA_CPP_DIR:-$RUNTIME_DIR/llama.cpp}"
 LLAMA_SERVER_BIN="${LLAMA_SERVER_BIN:-$LLAMA_CPP_DIR/build/bin/llama-server}"
 
+if [ -f config/model.env ]; then
+  # shellcheck disable=SC1091
+  source config/model.env
+fi
+
 MODEL_REPO="${MODEL_REPO:-HauhauCS/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive}"
-MODEL_QUANT="${MODEL_QUANT:-Q8_K_P}"
+MODEL_QUANT="${MODEL_QUANT:-Q4_K_M}"
 MODEL_ID="${MODEL_ID:-$MODEL_REPO:$MODEL_QUANT}"
+MODEL_BASENAME="${MODEL_BASENAME:-${MODEL_REPO##*/}}"
+HF_FILE="${HF_FILE:-$MODEL_BASENAME-$MODEL_QUANT.gguf}"
 
 HOST="${HOST:-0.0.0.0}"
 PORT="${PORT:-8080}"
-CTX_SIZE="${CTX_SIZE:-131072}"
+CTX_SIZE="${CTX_SIZE:-4096}"
 N_GPU_LAYERS="${N_GPU_LAYERS:-99}"
 PARALLEL="${PARALLEL:-1}"
 LOG_FILE="${LOG_FILE:-$RUNTIME_DIR/llama-server.log}"
@@ -51,6 +58,7 @@ stop_existing_server() {
 cmd=(
   "$LLAMA_SERVER_BIN"
   -hf "$MODEL_ID"
+  --hf-file "$HF_FILE"
   --alias "$MODEL_ID"
   --host "$HOST"
   --port "$PORT"
@@ -58,6 +66,7 @@ cmd=(
   -c "$CTX_SIZE"
   -ngl "$N_GPU_LAYERS"
   --parallel "$PARALLEL"
+  --no-mmproj
 )
 
 if [ -n "${LLAMA_EXTRA_ARGS:-}" ]; then
@@ -93,6 +102,11 @@ if [ "$BACKGROUND" = "1" ]; then
 
   echo "Waiting briefly for the server to bind..."
   sleep 8
+  if ! kill -0 "$(cat "$PID_FILE")" >/dev/null 2>&1; then
+    echo "llama-server exited during startup. Recent log:" >&2
+    tail -n 120 "$LOG_FILE" >&2 || true
+    exit 1
+  fi
   echo "Process status:"
   ps -p "$(cat "$PID_FILE")" -o pid,etime,pcpu,pmem,args || true
   echo "Recent log:"

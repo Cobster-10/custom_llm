@@ -12,6 +12,16 @@ Target model:
 HauhauCS/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive
 ```
 
+Current verified Thunder runtime:
+
+```text
+Q4_K_M
+CTX_SIZE=4096
+native llama-server --jinja --no-mmproj
+```
+
+`Q8_K_P` is downloaded/cached on Thunder but was not yet verified as a serving default; it stalled during load/fitting and needs separate tuning.
+
 Preferred serving approach:
 
 ```text
