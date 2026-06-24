@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-LLAMA_CPP_DIR="${LLAMA_CPP_DIR:-/content/llama.cpp}"
+RUNTIME_DIR="${RUNTIME_DIR:-$HOME/custom_llm_runtime}"
+LLAMA_CPP_DIR="${LLAMA_CPP_DIR:-$RUNTIME_DIR/llama.cpp}"
 LLAMA_SERVER_BIN="${LLAMA_SERVER_BIN:-$LLAMA_CPP_DIR/build/bin/llama-server}"
 
 MODEL_REPO="${MODEL_REPO:-HauhauCS/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive}"
@@ -13,7 +14,8 @@ PORT="${PORT:-8080}"
 CTX_SIZE="${CTX_SIZE:-131072}"
 N_GPU_LAYERS="${N_GPU_LAYERS:-99}"
 PARALLEL="${PARALLEL:-1}"
-LOG_FILE="${LOG_FILE:-/content/llama-server.log}"
+LOG_FILE="${LOG_FILE:-$RUNTIME_DIR/llama-server.log}"
+PID_FILE="${PID_FILE:-$RUNTIME_DIR/llama-server.pid}"
 BACKGROUND="${BACKGROUND:-1}"
 RESTART_SERVER="${RESTART_SERVER:-1}"
 
@@ -23,19 +25,19 @@ if [ ! -x "$LLAMA_SERVER_BIN" ]; then
   exit 1
 fi
 
-mkdir -p "$(dirname "$LOG_FILE")"
+mkdir -p "$(dirname "$LOG_FILE")" "$(dirname "$PID_FILE")"
 
 stop_existing_server() {
   echo "==> Stopping any existing process on port $PORT"
 
-  if [ -f /content/llama-server.pid ]; then
-    old_pid="$(cat /content/llama-server.pid 2>/dev/null || true)"
+  if [ -f "$PID_FILE" ]; then
+    old_pid="$(cat "$PID_FILE" 2>/dev/null || true)"
     if [ -n "$old_pid" ] && kill -0 "$old_pid" >/dev/null 2>&1; then
       kill "$old_pid" >/dev/null 2>&1 || true
       sleep 3
       kill -9 "$old_pid" >/dev/null 2>&1 || true
     fi
-    rm -f /content/llama-server.pid
+    rm -f "$PID_FILE"
   fi
 
   if command -v fuser >/dev/null 2>&1; then
@@ -86,13 +88,13 @@ if [ "$BACKGROUND" = "1" ]; then
   fi
 
   nohup "${cmd[@]}" > "$LOG_FILE" 2>&1 &
-  echo $! > /content/llama-server.pid
-  echo "PID: $(cat /content/llama-server.pid)"
+  echo $! > "$PID_FILE"
+  echo "PID: $(cat "$PID_FILE")"
 
   echo "Waiting briefly for the server to bind..."
   sleep 8
   echo "Process status:"
-  ps -p "$(cat /content/llama-server.pid)" -o pid,etime,pcpu,pmem,args || true
+  ps -p "$(cat "$PID_FILE")" -o pid,etime,pcpu,pmem,args || true
   echo "Recent log:"
   tail -n 80 "$LOG_FILE" || true
 else

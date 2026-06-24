@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import argparse
 import json
+import os
 import sys
 from typing import Any
 
@@ -31,6 +32,12 @@ def print_probe(base_url: str, headers: dict[str, str]) -> None:
 
 
 def main() -> int:
+    default_model_repo = os.environ.get(
+        "MODEL_REPO", "HauhauCS/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive"
+    )
+    default_model_quant = os.environ.get("MODEL_QUANT", "Q8_K_P")
+    default_model = os.environ.get("MODEL_ID", f"{default_model_repo}:{default_model_quant}")
+
     parser = argparse.ArgumentParser(
         description="Check whether an OpenAI-compatible endpoint returns structured tool_calls."
     )
@@ -41,7 +48,7 @@ def main() -> int:
     )
     parser.add_argument(
         "--model",
-        default="HauhauCS/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive:Q4_K_M",
+        default=default_model,
         help="Model id to send in the chat completion request.",
     )
     parser.add_argument("--api-key", default="not-needed")

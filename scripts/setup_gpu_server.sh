@@ -1,30 +1,74 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-LLAMA_CPP_DIR="${LLAMA_CPP_DIR:-/content/llama.cpp}"
+RUNTIME_DIR="${RUNTIME_DIR:-$HOME/custom_llm_runtime}"
+LLAMA_CPP_DIR="${LLAMA_CPP_DIR:-$RUNTIME_DIR/llama.cpp}"
 CMAKE_BUILD_TYPE="${CMAKE_BUILD_TYPE:-Release}"
 BUILD_THREADS="${BUILD_THREADS:-$(nproc)}"
 LLAMA_CPP_VERSION="${LLAMA_CPP_VERSION:-latest}"
+INSTALL_SYSTEM_PACKAGES="${INSTALL_SYSTEM_PACKAGES:-1}"
+export RUNTIME_DIR LLAMA_CPP_DIR LLAMA_CPP_VERSION
 
-echo "==> Checking built-in Colab tools"
-for tool in cmake curl; do
-  if ! command -v "$tool" >/dev/null 2>&1; then
-    echo "Missing required tool: $tool" >&2
+mkdir -p "$RUNTIME_DIR"
+
+maybe_install_system_packages() {
+  missing=()
+  for tool in cmake curl python3; do
+    if ! command -v "$tool" >/dev/null 2>&1; then
+      missing+=("$tool")
+    fi
+  done
+
+  if [ "${#missing[@]}" -eq 0 ]; then
+    return
+  fi
+
+  if [ "$INSTALL_SYSTEM_PACKAGES" != "1" ]; then
+    printf 'Missing required tools:'
+    printf ' %s' "${missing[@]}"
+    printf '\n'
+    echo "Set INSTALL_SYSTEM_PACKAGES=1 on a normal GPU VM to install them with apt." >&2
     exit 1
   fi
-done
+
+  if ! command -v sudo >/dev/null 2>&1 || ! command -v apt-get >/dev/null 2>&1; then
+    printf 'Missing required tools:'
+    printf ' %s' "${missing[@]}"
+    printf '\n'
+    echo "Automatic apt install is unavailable on this system." >&2
+    exit 1
+  fi
+
+  echo "==> Installing system build tools"
+  sudo apt-get update
+  sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
+    build-essential \
+    ca-certificates \
+    cmake \
+    curl \
+    git \
+    ninja-build \
+    pkg-config \
+    python3
+}
+
+maybe_install_system_packages
+
+echo "==> Checking Python HTTP client"
+python3 - <<'PY'
+try:
+    import requests
+except ImportError:
+    print("requests is not installed. Install it only if the tests fail to import requests.")
+else:
+    print(f"requests {requests.__version__}")
+PY
 
 if command -v ninja >/dev/null 2>&1; then
   CMAKE_GENERATOR="${CMAKE_GENERATOR:-Ninja}"
 else
   CMAKE_GENERATOR="${CMAKE_GENERATOR:-Unix Makefiles}"
 fi
-
-echo "==> Checking built-in Python packages"
-python3 - <<'PY'
-import requests
-print(f"requests {requests.__version__}")
-PY
 
 echo "==> Fetching llama.cpp source archive"
 python3 - <<'PY'
@@ -35,9 +79,10 @@ import tarfile
 import urllib.request
 from pathlib import Path
 
-target = Path(os.environ.get("LLAMA_CPP_DIR", "/content/llama.cpp"))
+runtime_dir = Path(os.environ.get("RUNTIME_DIR", str(Path.home() / "custom_llm_runtime")))
+target = Path(os.environ.get("LLAMA_CPP_DIR", str(runtime_dir / "llama.cpp")))
 version = os.environ.get("LLAMA_CPP_VERSION", "latest")
-archive = Path("/content/llama.cpp-src.tar.gz")
+archive = runtime_dir / "llama.cpp-src.tar.gz"
 
 if version == "latest":
     with urllib.request.urlopen("https://api.github.com/repos/ggml-org/llama.cpp/releases/latest", timeout=60) as response:
@@ -55,12 +100,10 @@ if target.exists():
 target.mkdir(parents=True)
 
 with tarfile.open(archive, "r:gz") as tar:
-    root = None
     for member in tar.getmembers():
         parts = member.name.split("/", 1)
         if len(parts) != 2:
             continue
-        root = parts[0]
         member.name = parts[1]
         tar.extract(member, path=target)
 
@@ -82,10 +125,10 @@ cmake --build "$LLAMA_CPP_DIR/build" \
 
 echo "==> Downloading cloudflared"
 curl -L --fail --retry 3 \
-  -o /content/cloudflared \
+  -o "$RUNTIME_DIR/cloudflared" \
   https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64
-chmod +x /content/cloudflared
+chmod +x "$RUNTIME_DIR/cloudflared"
 
 echo "==> Setup complete"
 "$LLAMA_CPP_DIR/build/bin/llama-server" --version || true
-/content/cloudflared --version || true
+"$RUNTIME_DIR/cloudflared" --version || true

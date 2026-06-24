@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import argparse
 import json
+import os
 import sys
 import time
 from pathlib import Path
@@ -23,7 +24,10 @@ def main() -> int:
     parser.add_argument("--base-url", default="http://127.0.0.1:8080")
     parser.add_argument("--timeout", type=int, default=1800)
     parser.add_argument("--interval", type=float, default=5.0)
-    parser.add_argument("--log-file", default="/content/llama-server.log")
+    default_log_file = os.environ.get("LOG_FILE")
+    if default_log_file is None:
+        default_log_file = str(Path.home() / "custom_llm_runtime" / "llama-server.log")
+    parser.add_argument("--log-file", default=default_log_file)
     args = parser.parse_args()
 
     base_url = args.base_url.rstrip("/")
