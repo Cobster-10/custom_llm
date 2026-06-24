@@ -25,7 +25,9 @@ with urllib.request.urlopen("https://api.github.com/repos/tmate-io/tmate/release
 asset_url = None
 for asset in release.get("assets", []):
     name = asset.get("name", "")
-    if re.search(r"linux.*amd64.*\.tar\.xz$", name):
+    if "dbg-symbols" in name:
+        continue
+    if re.search(r"tmate-.*static-linux-amd64\.tar\.xz$", name):
         asset_url = asset["browser_download_url"]
         break
 
