@@ -4,9 +4,10 @@ set -euo pipefail
 LLAMA_CPP_DIR="${LLAMA_CPP_DIR:-/content/llama.cpp}"
 CMAKE_BUILD_TYPE="${CMAKE_BUILD_TYPE:-Release}"
 BUILD_THREADS="${BUILD_THREADS:-$(nproc)}"
+LLAMA_CPP_VERSION="${LLAMA_CPP_VERSION:-latest}"
 
 echo "==> Checking built-in Colab tools"
-for tool in git cmake curl; do
+for tool in cmake curl; do
   if ! command -v "$tool" >/dev/null 2>&1; then
     echo "Missing required tool: $tool" >&2
     exit 1
@@ -25,12 +26,46 @@ import requests
 print(f"requests {requests.__version__}")
 PY
 
-echo "==> Fetching llama.cpp"
-if [ -d "$LLAMA_CPP_DIR/.git" ]; then
-  git -C "$LLAMA_CPP_DIR" pull --ff-only
-else
-  git clone https://github.com/ggml-org/llama.cpp.git "$LLAMA_CPP_DIR"
-fi
+echo "==> Fetching llama.cpp source archive"
+python3 - <<'PY'
+import json
+import os
+import shutil
+import tarfile
+import urllib.request
+from pathlib import Path
+
+target = Path(os.environ.get("LLAMA_CPP_DIR", "/content/llama.cpp"))
+version = os.environ.get("LLAMA_CPP_VERSION", "latest")
+archive = Path("/content/llama.cpp-src.tar.gz")
+
+if version == "latest":
+    with urllib.request.urlopen("https://api.github.com/repos/ggml-org/llama.cpp/releases/latest", timeout=60) as response:
+        release = json.load(response)
+    tag = release["tag_name"]
+else:
+    tag = version
+
+url = f"https://github.com/ggml-org/llama.cpp/archive/refs/tags/{tag}.tar.gz"
+print(f"Downloading {url}")
+urllib.request.urlretrieve(url, archive)
+
+if target.exists():
+    shutil.rmtree(target)
+target.mkdir(parents=True)
+
+with tarfile.open(archive, "r:gz") as tar:
+    root = None
+    for member in tar.getmembers():
+        parts = member.name.split("/", 1)
+        if len(parts) != 2:
+            continue
+        root = parts[0]
+        member.name = parts[1]
+        tar.extract(member, path=target)
+
+print(f"Extracted llama.cpp {tag} to {target}")
+PY
 
 echo "==> Building llama-server with CUDA support"
 cmake -S "$LLAMA_CPP_DIR" -B "$LLAMA_CPP_DIR/build" \
