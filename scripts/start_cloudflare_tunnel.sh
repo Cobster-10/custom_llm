@@ -5,8 +5,15 @@ PORT="${PORT:-8080}"
 LOCAL_URL="${LOCAL_URL:-http://127.0.0.1:$PORT}"
 LOG_FILE="${CLOUDFLARED_LOG_FILE:-/content/cloudflared.log}"
 BACKGROUND="${BACKGROUND:-1}"
+CLOUDFLARED_BIN="${CLOUDFLARED_BIN:-/content/cloudflared}"
 
-if ! command -v cloudflared >/dev/null 2>&1; then
+if [ ! -x "$CLOUDFLARED_BIN" ]; then
+  if command -v cloudflared >/dev/null 2>&1; then
+    CLOUDFLARED_BIN="$(command -v cloudflared)"
+  fi
+fi
+
+if [ ! -x "$CLOUDFLARED_BIN" ]; then
   echo "cloudflared is not installed. Run scripts/setup_colab.sh first." >&2
   exit 1
 fi
@@ -21,7 +28,7 @@ if [ "$BACKGROUND" = "1" ]; then
   if pgrep -f "cloudflared tunnel --url $LOCAL_URL" >/dev/null 2>&1; then
     echo "A cloudflared process already appears to be tunneling $LOCAL_URL."
   else
-    nohup cloudflared tunnel --url "$LOCAL_URL" > "$LOG_FILE" 2>&1 &
+    nohup "$CLOUDFLARED_BIN" tunnel --url "$LOCAL_URL" > "$LOG_FILE" 2>&1 &
     echo $! > /content/cloudflared.pid
     echo "PID: $(cat /content/cloudflared.pid)"
   fi
@@ -41,5 +48,5 @@ if [ "$BACKGROUND" = "1" ]; then
   tail -n 80 "$LOG_FILE" || true
   exit 1
 else
-  exec cloudflared tunnel --url "$LOCAL_URL"
+  exec "$CLOUDFLARED_BIN" tunnel --url "$LOCAL_URL"
 fi
