@@ -9,16 +9,16 @@ echo "==> Installing system packages"
 sudo apt-get update -y
 sudo apt-get install -y --no-install-recommends \
   build-essential \
-  ca-certificates \
   cmake \
   curl \
   git \
-  ninja-build \
-  pkg-config \
-  python3-pip
+  ninja-build
 
 echo "==> Installing Python test dependencies"
-python3 -m pip install --upgrade --quiet pip requests
+python3 - <<'PY'
+import requests
+print(f"requests {requests.__version__}")
+PY
 
 echo "==> Fetching llama.cpp"
 if [ -d "$LLAMA_CPP_DIR/.git" ]; then
